@@ -67,8 +67,8 @@ const LikedPosts: React.FC = () => {
     }
 
     const endpoint = activeTab === "i-liked"
-      ? `${baseUrl}/api/posts/liked-by-me`
-      : `${baseUrl}/api/posts/my-liked-posts`;
+      ? `${baseUrl}/posts/liked-by-me`
+      : `${baseUrl}/posts/my-liked-posts`;
 
     try {
       const response = await axios.get(
@@ -98,7 +98,7 @@ const LikedPosts: React.FC = () => {
     const token = localStorage.getItem("token");
     try {
       const response = await axios.get(
-        `${baseUrl}/api/posts/stats/overview`,
+        `${baseUrl}/posts/stats/overview`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -117,7 +117,7 @@ const LikedPosts: React.FC = () => {
     try {
       setUnliking(postId);
       const response = await axios.post(
-        `${baseUrl}/api/posts/unlike/${postId}`,
+        `${baseUrl}/posts/unlike/${postId}`,
         {},
         {
           headers: {
@@ -143,7 +143,7 @@ const LikedPosts: React.FC = () => {
     const token = localStorage.getItem("token");
     try {
       const response = await axios.get(
-        `${baseUrl}/api/posts/${postId}`,
+        `${baseUrl}/posts/${postId}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
