@@ -15,18 +15,27 @@ import {
 import axios from "axios";
 import { baseUrl } from "../baseUrl";
 
+interface User {
+  _id: string;
+  username: string;
+  profilePic?: string;
+}
+
+interface Comment {
+  _id: string;
+  user: User;
+  text: string;
+  createdAt: string;
+}
+
 interface Post {
   _id: string;
   text: string;
   image?: string;
-  likes: any[];
-  comments: any[];
+  likes: User[];
+  comments: Comment[];
   createdAt: string;
-  user: {
-    _id: string;
-    username: string;
-    profilePic?: string;
-  };
+  user: User;
 }
 
 interface PostStats {
@@ -38,6 +47,13 @@ interface PostStats {
   avgLikesPerPost: string;
 }
 
+interface Pagination {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  itemsPerPage: number;
+}
+
 const LikedPosts: React.FC = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<"i-liked" | "my-liked">("i-liked");
@@ -46,7 +62,7 @@ const LikedPosts: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState<PostStats | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pagination, setPagination] = useState({
+  const [pagination, setPagination] = useState<Pagination>({
     currentPage: 1,
     totalPages: 1,
     totalItems: 0,
@@ -55,7 +71,6 @@ const LikedPosts: React.FC = () => {
   const [unliking, setUnliking] = useState<string | null>(null);
   const [showStats, setShowStats] = useState(false);
 
-  // Fetch liked posts based on active tab
   const fetchLikedPosts = async (page: number) => {
     setLoading(true);
     setError(null);
@@ -80,10 +95,20 @@ const LikedPosts: React.FC = () => {
         }
       );
 
-      setPosts(response.data.posts);
-      setPagination(response.data.pagination);
-      if (response.data.posts.length > 0) {
+      setPosts(response.data.posts || []);
+      setPagination(response.data.pagination || {
+        currentPage: 1,
+        totalPages: 1,
+        totalItems: 0,
+        itemsPerPage: 10,
+      });
+
+      if (response.data.posts && response.data.posts.length > 0) {
         setSelectedPost(response.data.posts[0]);
+        // Fetch detailed view of the first post
+        fetchPostDetails(response.data.posts[0]._id);
+      } else {
+        setSelectedPost(null);
       }
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to fetch posts");
@@ -93,7 +118,6 @@ const LikedPosts: React.FC = () => {
     }
   };
 
-  // Fetch post statistics
   const fetchPostStats = async () => {
     const token = localStorage.getItem("token");
     try {
@@ -111,9 +135,13 @@ const LikedPosts: React.FC = () => {
     }
   };
 
-  // Handle unlike post
   const handleUnlike = async (postId: string) => {
     const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
     try {
       setUnliking(postId);
       const response = await axios.post(
@@ -138,9 +166,10 @@ const LikedPosts: React.FC = () => {
     }
   };
 
-  // Fetch specific post details
   const fetchPostDetails = async (postId: string) => {
     const token = localStorage.getItem("token");
+    if (!token) return;
+
     try {
       const response = await axios.get(
         `${baseUrl}/posts/${postId}`,
@@ -161,10 +190,13 @@ const LikedPosts: React.FC = () => {
     fetchPostStats();
   }, [activeTab]);
 
+  useEffect(() => {
+    fetchLikedPosts(pagination.currentPage);
+  }, [pagination.currentPage]);
+
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > pagination.totalPages) return;
     setPagination(prev => ({ ...prev, currentPage: newPage }));
-    fetchLikedPosts(newPage);
   };
 
   const timeAgo = (dateString: string): string => {
@@ -189,9 +221,8 @@ const LikedPosts: React.FC = () => {
     });
   };
 
-  // Calculate likes you've given vs received
   const calculateLikesStats = () => {
-    if (!stats) return null;
+    if (!stats || activeTab !== "i-liked") return null;
 
     const likesGiven = posts.reduce((acc, post) => acc + (post.likes?.length || 0), 0);
     const likesReceived = stats.totalLikes;
@@ -206,14 +237,14 @@ const LikedPosts: React.FC = () => {
   const likesStats = calculateLikesStats();
 
   return (
-    <div className="w-full min-h-screen bg-gray-100 flex">
+    <div className="w-full min-h-screen bg-gray-100 flex flex-col md:flex-row">
       {/* LEFT PANEL */}
-      <div className="w-2/5 bg-white border-r p-4 overflow-y-auto">
+      <div className="w-full md:w-2/5 bg-white border-r p-4 overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-bold">Liked Posts</h2>
           <button
             onClick={() => setShowStats(!showStats)}
-            className="flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"
+            className="flex items-center gap-2 px-3 py-1 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 text-sm"
           >
             <BarChart3 className="w-4 h-4" />
             {showStats ? "Hide Stats" : "Show Stats"}
@@ -362,8 +393,8 @@ const LikedPosts: React.FC = () => {
                   {timeAgo(post.createdAt)}
                 </div>
                 <div className="text-xs text-gray-700 truncate mt-1">
-                  {post.text.substring(0, 60)}
-                  {post.text.length > 60 ? "..." : ""}
+                  {post.text?.substring(0, 60) || "No text content"}
+                  {post.text && post.text.length > 60 ? "..." : ""}
                 </div>
                 <div className="flex items-center space-x-3 mt-1">
                   <div className="flex items-center space-x-1 text-red-500">
@@ -402,7 +433,7 @@ const LikedPosts: React.FC = () => {
             <button
               onClick={() => handlePageChange(pagination.currentPage - 1)}
               disabled={pagination.currentPage === 1}
-              className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50 flex items-center"
+              className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50 flex items-center text-sm"
             >
               <ChevronLeft className="w-4 h-4 mr-1" />
               Prev
@@ -413,7 +444,7 @@ const LikedPosts: React.FC = () => {
             <button
               onClick={() => handlePageChange(pagination.currentPage + 1)}
               disabled={pagination.currentPage === pagination.totalPages}
-              className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50 flex items-center"
+              className="px-3 py-1 bg-gray-200 rounded disabled:opacity-50 flex items-center text-sm"
             >
               Next
               <ChevronRight className="w-4 h-4 ml-1" />
@@ -423,12 +454,12 @@ const LikedPosts: React.FC = () => {
       </div>
 
       {/* RIGHT PANEL */}
-      <div className="w-3/5 p-6">
+      <div className="w-full md:w-3/5 p-4 md:p-6">
         {selectedPost ? (
           <div className="bg-white rounded-xl shadow max-w-2xl w-full mx-auto">
             {/* Post Header */}
             <div className="p-6 border-b">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-4 flex-col sm:flex-row gap-4">
                 <div className="flex items-center gap-3">
                   {selectedPost.user.profilePic ? (
                     <img
@@ -473,7 +504,7 @@ const LikedPosts: React.FC = () => {
                   <img
                     src={selectedPost.image}
                     alt="post"
-                    className="w-full h-auto max-h-96 object-cover"
+                    className="w-full h-auto max-h-96 object-contain"
                   />
                 </div>
               )}
@@ -504,7 +535,7 @@ const LikedPosts: React.FC = () => {
                   Liked by {selectedPost.likes.length} people
                 </h3>
                 <div className="flex flex-wrap gap-2">
-                  {selectedPost.likes.slice(0, 10).map((like: any, index: number) => (
+                  {selectedPost.likes.slice(0, 10).map((like: User, index: number) => (
                     <div
                       key={like._id || index}
                       className="flex items-center space-x-2 bg-gray-50 px-3 py-2 rounded-full"
@@ -544,8 +575,8 @@ const LikedPosts: React.FC = () => {
                   Recent Comments ({selectedPost.comments.length})
                 </h3>
                 <div className="space-y-4">
-                  {selectedPost.comments.slice(0, 3).map((comment: any, index: number) => (
-                    <div key={index} className="flex items-start space-x-3">
+                  {selectedPost.comments.slice(0, 3).map((comment: Comment, index: number) => (
+                    <div key={comment._id || index} className="flex items-start space-x-3">
                       {comment.user?.profilePic ? (
                         <img
                           src={comment.user.profilePic}
@@ -587,7 +618,7 @@ const LikedPosts: React.FC = () => {
             )}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center h-full">
+          <div className="flex flex-col items-center justify-center h-full py-12">
             <Heart className="w-16 h-16 text-gray-300 mb-4" />
             <h3 className="text-lg font-semibold text-gray-600 mb-2">
               Select a post
@@ -597,12 +628,14 @@ const LikedPosts: React.FC = () => {
                 ? "Select a post from the list to view details of posts you've liked"
                 : "Select a post from the list to see who liked your content"}
             </p>
-            <button
-              onClick={() => setShowStats(true)}
-              className="mt-4 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"
-            >
-              View Statistics
-            </button>
+            {posts.length === 0 && (
+              <button
+                onClick={() => setShowStats(true)}
+                className="mt-4 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"
+              >
+                View Statistics
+              </button>
+            )}
           </div>
         )}
       </div>
